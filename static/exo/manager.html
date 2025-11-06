@@ -1,0 +1,90 @@
+<!doctype html><meta charset="utf-8">
+<title>EXO Manager Review</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<div class="container p-3 p-md-4">
+  <h1 class="mb-3">EXO™ Manager Review</h1>
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-3"><input id="api" class="form-control" placeholder="https://yourapp/exo/staging"></div>
+    <div class="col-md-2">
+      <select id="rs" class="form-select">
+        <option value="">All</option><option>PENDING</option><option>APPROVED</option><option>REJECTED</option>
+      </select>
+    </div>
+    <div class="col-md-3"><input id="ref" class="form-control" placeholder="Search External Ref"></div>
+    <div class="col-md-2"><input id="bearer" class="form-control" placeholder="Bearer token"></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-primary" onclick="load()">Load</button></div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Ref</th><th>Builder</th><th>Built</th><th>CO₂</th><th>Cost</th><th>Stage</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary" onclick="prev()">◀ Prev</button>
+    <button class="btn btn-outline-secondary" onclick="next()">Next ▶</button>
+    <a class="btn btn-success" id="exportLink" target="_blank">Export APPROVED (JSON)</a>
+  </div>
+
+  <div id="msg" class="mt-3"></div>
+</div>
+<script>
+let limit=50, offset=0, last = {items:[], total:0};
+
+function hdrs(){
+  const b = document.getElementById('bearer').value.trim();
+  return b ? {'Authorization':`Bearer ${b}`} : {};
+}
+function q(url, params){
+  const u = new URL(url); Object.entries(params).forEach(([k,v])=>{ if(v!==''&&v!=null) u.searchParams.set(k,v) });
+  return u.toString();
+}
+async function load(){
+  const url = document.getElementById('api').value.trim();
+  const rs  = document.getElementById('rs').value;
+  const ref = document.getElementById('ref').value.trim();
+  const endpoint = q(url, {review_status: rs, external_ref: ref, limit, offset});
+  const res = await fetch(endpoint, {headers: hdrs()});
+  const data = await res.json();
+  last = data;
+  render(data.items || []);
+  // set export link
+  const exportUrl = new URL(url.replace(/\/staging$/, '/staging/export'));
+  document.getElementById('exportLink').href = exportUrl.toString();
+}
+function render(items){
+  const tb = document.getElementById('rows'); tb.innerHTML='';
+  for(const r of items){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(r.external_ref||'')}</td>
+      <td>${esc(r.builder_name||'')}</td>
+      <td>${esc(r.built_at||'')}</td>
+      <td>${fmt(r.co2_offset_lbs)}</td>
+      <td>$${fmt(r.total_cost_usd)}</td>
+      <td><span class="badge bg-${badge(r.review_status)}">${r.review_status}</span></td>
+      <td>
+        <button class="btn btn-sm btn-success" onclick="act('${r.id}','APPROVE')">Approve</button>
+        <button class="btn btn-sm btn-warning" onclick="act('${r.id}','MARK_CURED')">Mark Cured</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="act('${r.id}','REJECT')">Reject</button>
+      </td>`;
+    tb.appendChild(tr);
+  }
+  document.getElementById('msg').textContent = `Showing ${items.length} / ${last.total} (offset ${offset})`;
+}
+function esc(s){return (s??'').toString().replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function fmt(v){return (v==null||v==='')?'—':Number(v).toLocaleString()}
+function badge(s){return s==='APPROVED'?'success':(s==='REJECTED'?'danger':'secondary')}
+async function act(id, action){
+  const base = document.getElementById('api').value.trim().replace(/\/staging$/, '');
+  const url  = `${base}/staging/${id}`;
+  const res = await fetch(url, {method:'PATCH', headers:{'Content-Type':'application/json', ...hdrs()}, body: JSON.stringify({action, reviewer_name:'Manager'})});
+  if(res.ok){ load(); } else { document.getElementById('msg').textContent = `Error ${res.status}` }
+}
+function next(){ if(offset+limit < last.total){ offset+=limit; load(); } }
+function prev(){ if(offset-limit >= 0){ offset-=limit; load(); } }
+</script>

@@ -1,0 +1,89 @@
+<!doctype html><meta charset="utf-8">
+<title>EXO Builder Intake</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<div class="container p-3 p-md-4">
+  <h1 class="mb-3">EXO™ Builder Intake</h1>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Ingest URL</label>
+      <input id="ingestUrl" class="form-control" placeholder="https://yourapp/exo/intake">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">HMAC Secret</label>
+      <input id="hmacSecret" type="password" class="form-control" placeholder="EXO_BUILDER_HMAC">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Idempotency Key</label>
+      <input id="idem" class="form-control" placeholder="exo-001-YYYY-MM-DD">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">External Ref</label>
+      <input id="ext" class="form-control" value="BLOCK-001">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Builder Name</label>
+      <input id="bname" class="form-control" value="Atlas IP Holdings LLC">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Built At (UTC ISO)</label>
+      <input id="built" class="form-control" placeholder="2025-08-29T16:40:00Z">
+    </div>
+    <div class="col-12">
+      <label class="form-label">Payload JSON (edit if needed)</label>
+      <textarea id="json" class="form-control" rows="14"></textarea>
+      <div class="form-text">Must match the ExoPayload schema.</div>
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button class="btn btn-primary" onclick="send()">Send</button>
+      <div id="msg" class="ms-2"></div>
+    </div>
+  </div>
+</div>
+<script>
+const enc = new TextEncoder();
+function isoNow(){return new Date().toISOString()}
+function defaultPayload(){
+  return {
+    idempotency_key: document.getElementById('idem').value || `exo-${(document.getElementById('ext').value||'NA').toLowerCase()}-${new Date().toISOString().slice(0,10)}`,
+    external_ref: document.getElementById('ext').value || null,
+    builder: { id: null, name: document.getElementById('bname').value || 'Unknown', org_id: null },
+    location: { label: null, latitude: null, longitude: null },
+    timestamps: { built_at: document.getElementById('built').value || isoNow(), cured_at: null, installed_at: null },
+    status: "poured",
+    metrics: { co2_offset_lbs: 850, volume_ft3: 98, height_in: 48, total_cost_usd: 840 },
+    method: "Slurry-Lift Method™ (8 batches)",
+    core_fill: { tires: 6, compost_ft3: 38, pvc_root_tubes: 7, straw_cap: true, wire_mesh_cap: true },
+    materials: {
+      straw_bales:8, straw_ft3:72, hemp_hurd_bags:2, hemp_hurd_ft3:5,
+      rubber_mulch_bags:8, rubber_mulch_ft3:6.4, mycelium_blocks:20, mycelium_ft3:10,
+      type_s_lime_bags:12, type_s_lime_ft3:20, water_gal:28, air_expansion_pct:"20-25",
+      hardware_cloth_sqft:"55-60", rebar:{count:40, size:"#4", cage:"full 3D tied"}
+    },
+    batches: [{batch_no:1,notes:"lime-water slurry; layered mycelium"}],
+    structure_notes: "Built-in rebar loops + bottom insets; fire-resistant, no Portland.",
+    media: { photo_urls:[], doc_urls:[] },
+    signature: null, qr_slug: "exo-b001"
+  }
+}
+async function hmacHex(secret, msg){
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(msg));
+  return [...new Uint8Array(sig)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function send(){
+  const url = document.getElementById('ingestUrl').value.trim();
+  const secret = document.getElementById('hmacSecret').value.trim();
+  const msg = document.getElementById('msg');
+  try{
+    const body = document.getElementById('json').value.trim() || JSON.stringify(defaultPayload());
+    const sig = await hmacHex(secret, body);
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-Signature':sig}, body});
+    const txt = await res.text();
+    msg.className='text-' + (res.ok?'success':'danger');
+    msg.textContent = res.ok ? `OK: ${txt}` : `Error ${res.status}: ${txt}`;
+  }catch(e){ msg.className='text-danger'; msg.textContent = 'Send failed: '+e.message; }
+}
+// Prefill JSON
+document.getElementById('json').value = JSON.stringify(defaultPayload(), null, 2);
+</script>

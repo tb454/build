@@ -1,0 +1,33 @@
+@'
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+
+# Build/Reports
+*.pdf
+*.zip
+
+# Node (if any)
+node_modules/
+
+# Cache
+.cache/
+'@ | Out-File -Encoding UTF8 .gitignore
